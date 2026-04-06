@@ -241,7 +241,7 @@ async def on_ready():
         embed.add_field(name="📋 Reason", value=reason, inline=False)
 
         if evidence:
-            embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
+            embed.add_field(name="🔗 Proof", value=evidence, inline=False)
 
         if failed:
             embed.add_field(
