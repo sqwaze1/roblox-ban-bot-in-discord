@@ -4,6 +4,7 @@ from discord.ext import commands
 import aiohttp
 import os
 import re
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,13 +23,8 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 
 def parse_duration(duration_str):
-    """
-    Parses duration string like '1d 3h 10m' into total seconds.
-    Returns None for permanent ban (-1).
-    """
     if duration_str.strip() == "-1":
         return None
-
     total_seconds = 0
     pattern = re.findall(r"(\d+)\s*([dhm])", duration_str.lower())
     for value, unit in pattern:
@@ -39,12 +35,10 @@ def parse_duration(duration_str):
             total_seconds += value * 3600
         elif unit == "m":
             total_seconds += value * 60
-
     return total_seconds if total_seconds > 0 else None
 
 
 def format_duration(duration_str):
-    """Returns a human-readable duration string."""
     if duration_str.strip() == "-1":
         return "Permanent"
     parts = []
@@ -60,7 +54,6 @@ def format_duration(duration_str):
 
 
 async def get_roblox_user_info(session, user_id):
-    """Fetches Roblox user info by user ID."""
     url = "https://users.roblox.com/v1/users/{}".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
@@ -69,7 +62,6 @@ async def get_roblox_user_info(session, user_id):
 
 
 async def get_roblox_user_avatar(session, user_id):
-    """Fetches Roblox user avatar thumbnail URL."""
     url = "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={}&size=150x150&format=Png".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
@@ -80,8 +72,16 @@ async def get_roblox_user_avatar(session, user_id):
     return None
 
 
-async def get_roblox_followers(session, user_id):
-    """Fetches Roblox user follower count."""
+async def get_roblox_friends_count(session, user_id):
+    url = "https://friends.roblox.com/v1/users/{}/friends/count".format(user_id)
+    async with session.get(url) as resp:
+        if resp.status == 200:
+            data = await resp.json()
+            return data.get("count", 0)
+    return 0
+
+
+async def get_roblox_followers_count(session, user_id):
     url = "https://friends.roblox.com/v1/users/{}/followers/count".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
@@ -90,8 +90,16 @@ async def get_roblox_followers(session, user_id):
     return 0
 
 
+async def get_roblox_following_count(session, user_id):
+    url = "https://friends.roblox.com/v1/users/{}/followings/count".format(user_id)
+    async with session.get(url) as resp:
+        if resp.status == 200:
+            data = await resp.json()
+            return data.get("count", 0)
+    return 0
+
+
 async def get_user_id_by_name(session, username):
-    """Fetches userId by username."""
     url = "https://users.roblox.com/v1/usernames/users"
     payload = {"usernames": [username], "excludeBannedUsers": False}
     async with session.post(url, json=payload) as resp:
@@ -105,7 +113,6 @@ async def get_user_id_by_name(session, username):
 
 
 async def ban_roblox_user(session, user_id, reason, duration_seconds):
-    """Bans a user via Roblox Open Cloud API."""
     url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
         ROBLOX_UNIVERSE_ID, user_id
     )
@@ -113,21 +120,18 @@ async def ban_roblox_user(session, user_id, reason, duration_seconds):
         "x-api-key": ROBLOX_API_KEY,
         "Content-Type": "application/json",
     }
-
     game_join_restriction = {
         "active": True,
         "privateReason": reason,
         "displayReason": reason,
         "excludeAltAccounts": False,
     }
-
     if duration_seconds is not None:
         game_join_restriction["duration"] = "{}s".format(duration_seconds)
     else:
         game_join_restriction["duration"] = None
 
     payload = {"gameJoinRestriction": game_join_restriction}
-
     async with session.patch(url, headers=headers, json=payload) as resp:
         if resp.status in (200, 201):
             return True, "OK"
@@ -169,7 +173,6 @@ async def on_ready():
             await interaction.followup.send("You do not have permission to use this command.")
             return
 
-        
         duration_seconds = parse_duration(duration)
         if duration_seconds is None and duration.strip() != "-1":
             await interaction.followup.send(
@@ -178,72 +181,57 @@ async def on_ready():
             return
 
         async with aiohttp.ClientSession() as session:
-            
-            user_id = None
+            # Resolve user_id
             if method.value == "user-id":
                 if not value.isdigit():
                     await interaction.followup.send("Invalid format: user-id must be a number.")
                     return
                 user_id = int(value)
-            elif method.value == "user-name":
+            else:
                 user_id = await get_user_id_by_name(session, value)
                 if not user_id:
                     await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
                     return
 
-            
-            user_info = await get_roblox_user_info(session, user_id)
-            avatar_url = await get_roblox_user_avatar(session, user_id)
-            followers = await get_roblox_followers(session, user_id)
+            # Fetch all info
+            user_info, avatar_url, friends, followers, following = (
+                await get_roblox_user_info(session, user_id),
+                await get_roblox_user_avatar(session, user_id),
+                await get_roblox_friends_count(session, user_id),
+                await get_roblox_followers_count(session, user_id),
+                await get_roblox_following_count(session, user_id),
+            )
 
             username = user_info.get("name", "Unknown") if user_info else "Unknown"
             display_name = user_info.get("displayName", username) if user_info else username
 
-            
             success, error = await ban_roblox_user(session, user_id, reason, duration_seconds)
 
         if success:
+            profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+
+            # Grey color like Avis bot
             embed = discord.Embed(
-                title="🔨 Player Banned",
-                color=discord.Color.red()
+                timestamp=datetime.now(timezone.utc),
+                description="[**{}** (@{})]({})\n{} Friends | {:,} Followers | {} Following".format(
+                    display_name, username, profile_url,
+                    friends, followers, following
+                ),
+                color=0x99aab5
             )
 
             if avatar_url:
                 embed.set_thumbnail(url=avatar_url)
 
-            embed.add_field(
-                name="👤 Player",
-                value="**{}** (@{})\nID: `{}`".format(display_name, username, user_id),
-                inline=False
-            )
-            embed.add_field(
-                name="👥 Followers",
-                value="{:,}".format(followers),
-                inline=True
-            )
-            embed.add_field(
-                name="⏱ Duration",
-                value=format_duration(duration),
-                inline=True
-            )
-            embed.add_field(
-                name="📋 Reason",
-                value=reason,
-                inline=False
-            )
-            embed.add_field(
-                name="🛡 Moderator",
-                value=interaction.user.mention,
-                inline=True
-            )
-            if evidence:
-                embed.add_field(
-                    name="🔗 Evidence",
-                    value=evidence,
-                    inline=False
-                )
+            embed.add_field(name="⏱ Duration", value=format_duration(duration), inline=True)
+            embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
+            embed.add_field(name="📋 Reason", value=reason, inline=False)
 
-            embed.set_footer(text="Roblox Ban System")
+            if evidence:
+                embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
+
+            embed.set_footer(text="ID: {}".format(user_id))
+
             await interaction.followup.send(embed=embed)
         else:
             await interaction.followup.send("Ban failed: ```{}```".format(error))
