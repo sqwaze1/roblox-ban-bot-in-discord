@@ -217,7 +217,6 @@ async def on_ready():
                 description="{} Friends  **|**  {:,} Followers  **|**  {} Following".format(
                     friends, followers, following
                 ),
-                timestamp=datetime.now(timezone.utc),
                 color=0x99aab5
             )
 
@@ -231,7 +230,11 @@ async def on_ready():
             if evidence:
                 embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
 
+            ban_timestamp = int(datetime.now(timezone.utc).timestamp())
             embed.set_footer(text="ID: {}".format(user_id))
+            embed.description += "
+
+<t:{}:F>".format(ban_timestamp)
 
             await interaction.followup.send(embed=embed)
         else:
