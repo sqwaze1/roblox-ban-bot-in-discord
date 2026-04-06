@@ -256,5 +256,4 @@ async def on_ready():
     await bot.tree.sync(guild=guild)
     print("Commands synced to guild {}.".format(GUILD_ID))
 
-
 bot.run(DISCORD_TOKEN)
