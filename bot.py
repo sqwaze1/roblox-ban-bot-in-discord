@@ -7,11 +7,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DISCORD_TOKEN = "your"
-ROBLOX_UNIVERSE_ID = "your"
-GUILD_ID = "your"
-
-ROBLOX_API_KEY = "your"
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+ROBLOX_UNIVERSE_ID = os.getenv("ROBLOX_UNIVERSE_ID")
+GUILD_ID = int(os.getenv("GUILD_ID", "0"))
+ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
 ALLOWED_ROLE_NAME = "OG"
 
