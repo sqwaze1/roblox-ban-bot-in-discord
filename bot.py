@@ -14,9 +14,10 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
 ALLOWED_ROLES = [
-    "OG",
-    "Moderator",
-    "Admin",
+    "Owner",
+    "Developer",
+    "Community Manager",
+    "Community Helper",
 ]
 
 UNIVERSE_IDS = []
