@@ -10,11 +10,33 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-ROBLOX_UNIVERSE_ID = os.getenv("ROBLOX_UNIVERSE_ID")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
-ALLOWED_ROLE_NAME = "OG"
+# ─────────────────────────────────────────────
+# CONFIG: Roles allowed to use /rban
+# ─────────────────────────────────────────────
+ALLOWED_ROLES = [
+    "OG",
+    "Moderator",
+    "Admin",
+]
+
+# ─────────────────────────────────────────────
+# CONFIG: Universe IDs of your places
+# Add as many as needed
+# ─────────────────────────────────────────────
+# Automatically finds all UNIVERSE_ID_1, UNIVERSE_ID_2, ... variables
+UNIVERSE_IDS = []
+i = 1
+while True:
+    uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
+    if not uid:
+        break
+    UNIVERSE_IDS.append(uid)
+    i += 1
+
+# ─────────────────────────────────────────────
 
 intents = discord.Intents.default()
 intents.members = True
@@ -76,8 +98,7 @@ async def get_roblox_friends_count(session, user_id):
     url = "https://friends.roblox.com/v1/users/{}/friends/count".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
-            data = await resp.json()
-            return data.get("count", 0)
+            return (await resp.json()).get("count", 0)
     return 0
 
 
@@ -85,8 +106,7 @@ async def get_roblox_followers_count(session, user_id):
     url = "https://friends.roblox.com/v1/users/{}/followers/count".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
-            data = await resp.json()
-            return data.get("count", 0)
+            return (await resp.json()).get("count", 0)
     return 0
 
 
@@ -94,8 +114,7 @@ async def get_roblox_following_count(session, user_id):
     url = "https://friends.roblox.com/v1/users/{}/followings/count".format(user_id)
     async with session.get(url) as resp:
         if resp.status == 200:
-            data = await resp.json()
-            return data.get("count", 0)
+            return (await resp.json()).get("count", 0)
     return 0
 
 
@@ -107,41 +126,35 @@ async def get_user_id_by_name(session, username):
             return None
         data = await resp.json()
         users = data.get("data", [])
-        if users:
-            return users[0]["id"]
-        return None
+        return users[0]["id"] if users else None
 
 
-async def ban_roblox_user(session, user_id, reason, duration_seconds):
+async def ban_in_universe(session, user_id, reason, duration_seconds, universe_id):
     url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
-        ROBLOX_UNIVERSE_ID, user_id
+        universe_id, user_id
     )
     headers = {
         "x-api-key": ROBLOX_API_KEY,
         "Content-Type": "application/json",
     }
-    game_join_restriction = {
+    restriction = {
         "active": True,
         "privateReason": reason,
         "displayReason": reason,
         "excludeAltAccounts": False,
+        "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
     }
-    if duration_seconds is not None:
-        game_join_restriction["duration"] = "{}s".format(duration_seconds)
-    else:
-        game_join_restriction["duration"] = None
-
-    payload = {"gameJoinRestriction": game_join_restriction}
-    async with session.patch(url, headers=headers, json=payload) as resp:
+    async with session.patch(url, headers=headers, json={"gameJoinRestriction": restriction}) as resp:
         if resp.status in (200, 201):
-            return True, "OK"
-        error = await resp.text()
-        return False, error
+            return True, None
+        return False, await resp.text()
 
 
 @bot.event
 async def on_ready():
     print("Bot ready: {}".format(bot.user))
+    print("Loaded {} universe(s)".format(len(UNIVERSE_IDS)))
+
     guild = discord.Object(id=GUILD_ID)
     bot.tree.clear_commands(guild=guild)
     bot.tree.clear_commands(guild=None)
@@ -155,10 +168,12 @@ async def on_ready():
         duration="Duration: e.g. 1d 3h 10m or -1 for permanent",
         evidence="Optional link to forum post or evidence"
     )
-    @app_commands.choices(method=[
-        app_commands.Choice(name="user-id", value="user-id"),
-        app_commands.Choice(name="user-name", value="user-name"),
-    ])
+    @app_commands.choices(
+        method=[
+            app_commands.Choice(name="user-id", value="user-id"),
+            app_commands.Choice(name="user-name", value="user-name"),
+        ]
+    )
     async def rban_command(
         interaction: discord.Interaction,
         method: app_commands.Choice[str],
@@ -169,19 +184,20 @@ async def on_ready():
     ):
         await interaction.response.defer()
 
-        if not any(r.name == ALLOWED_ROLE_NAME for r in interaction.user.roles):
+        # Check roles
+        user_role_names = [r.name for r in interaction.user.roles]
+        if not any(role in ALLOWED_ROLES for role in user_role_names):
             await interaction.followup.send("You do not have permission to use this command.")
             return
 
+        # Parse duration
         duration_seconds = parse_duration(duration)
         if duration_seconds is None and duration.strip() != "-1":
-            await interaction.followup.send(
-                "Invalid duration format. Use `1d 3h 10m` or `-1` for permanent."
-            )
+            await interaction.followup.send("Invalid duration. Use `1d 3h 10m` or `-1` for permanent.")
             return
 
         async with aiohttp.ClientSession() as session:
-            # Resolve user_id
+            # Resolve user
             if method.value == "user-id":
                 if not value.isdigit():
                     await interaction.followup.send("Invalid format: user-id must be a number.")
@@ -193,52 +209,62 @@ async def on_ready():
                     await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
                     return
 
-            # Fetch all info
-            user_info, avatar_url, friends, followers, following = (
-                await get_roblox_user_info(session, user_id),
-                await get_roblox_user_avatar(session, user_id),
-                await get_roblox_friends_count(session, user_id),
-                await get_roblox_followers_count(session, user_id),
-                await get_roblox_following_count(session, user_id),
-            )
+            # Fetch info
+            user_info = await get_roblox_user_info(session, user_id)
+            avatar_url = await get_roblox_user_avatar(session, user_id)
+            friends = await get_roblox_friends_count(session, user_id)
+            followers = await get_roblox_followers_count(session, user_id)
+            following = await get_roblox_following_count(session, user_id)
 
             username = user_info.get("name", "Unknown") if user_info else "Unknown"
             display_name = user_info.get("displayName", username) if user_info else username
 
-            success, error = await ban_roblox_user(session, user_id, reason, duration_seconds)
+            # Ban in all universes
+            results = []
+            for uid in UNIVERSE_IDS:
+                ok, err = await ban_in_universe(session, user_id, reason, duration_seconds, uid)
+                results.append((uid, ok, err))
 
-        if success:
-            profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+        failed = [(uid, err) for uid, ok, err in results if not ok]
 
-            # Grey color like Avis bot
-            embed = discord.Embed(
-                title="{} (@{})".format(display_name, username),
-                url=profile_url,
-                description="{} Friends  **|**  {:,} Followers  **|**  {} Following".format(
-                    friends, followers, following
-                ),
-                color=0x99aab5
+        profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+        ban_timestamp = int(datetime.now(timezone.utc).timestamp())
+        embed = discord.Embed(
+            title="{} (@{})".format(display_name, username),
+            url=profile_url,
+            description="{} Friends  **|**  {:,} Followers  **|**  {} Following
+
+<t:{}:F>".format(
+                friends, followers, following, ban_timestamp
+            ),
+            color=0x99aab5 if not failed else 0xe74c3c
+        )
+
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
+
+        embed.add_field(name="⏱ Duration", value=format_duration(duration), inline=True)
+        embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
+        embed.add_field(
+            name="🎮 Places",
+            value="{}/{} banned".format(len(results) - len(failed), len(results)),
+            inline=True
+        )
+        embed.add_field(name="📋 Reason", value=reason, inline=False)
+
+        if evidence:
+            embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
+
+        if failed:
+            embed.add_field(
+                name="⚠️ Failed",
+                value="
+".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed]),
+                inline=False
             )
 
-            if avatar_url:
-                embed.set_thumbnail(url=avatar_url)
-
-            embed.add_field(name="⏱ Duration", value=format_duration(duration), inline=True)
-            embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-            embed.add_field(name="📋 Reason", value=reason, inline=False)
-
-            if evidence:
-                embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
-
-            ban_timestamp = int(datetime.now(timezone.utc).timestamp())
-            embed.set_footer(text="ID: {}".format(user_id))
-            embed.description += "
-
-<t:{}:F>".format(ban_timestamp)
-
-            await interaction.followup.send(embed=embed)
-        else:
-            await interaction.followup.send("Ban failed: ```{}```".format(error))
+        embed.set_footer(text="ID: {}".format(user_id))
+        await interaction.followup.send(embed=embed)
 
     await bot.tree.sync(guild=guild)
     print("Commands synced to guild {}.".format(GUILD_ID))
