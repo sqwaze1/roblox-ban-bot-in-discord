@@ -212,11 +212,12 @@ async def on_ready():
 
             # Grey color like Avis bot
             embed = discord.Embed(
-                timestamp=datetime.now(timezone.utc),
-                description="[**{}** (@{})]({})\n{} Friends | {:,} Followers | {} Following".format(
-                    display_name, username, profile_url,
+                title="{} (@{})".format(display_name, username),
+                url=profile_url,
+                description="{} Friends  **|**  {:,} Followers  **|**  {} Following".format(
                     friends, followers, following
                 ),
+                timestamp=datetime.now(timezone.utc),
                 color=0x99aab5
             )
 
