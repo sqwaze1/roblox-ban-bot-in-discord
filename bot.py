@@ -226,7 +226,7 @@ async def on_ready():
         embed = discord.Embed(
             title="{} (@{})".format(display_name, username),
             url=profile_url,
-            description="{} Friends  **|**  {:,} Followers  **|**  {} Following
+            description="{} Friends  **|**  {:,} Followers  **|**  {} Following"
 
 <t:{}:F>".format(
                 friends, followers, following, ban_timestamp
