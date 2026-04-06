@@ -13,13 +13,11 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
-
 ALLOWED_ROLES = [
     "OG",
-    "Moderator",
-    "Admin",
+    "",
+    "",
 ]
-
 
 UNIVERSE_IDS = []
 i = 1
@@ -29,8 +27,6 @@ while True:
         break
     UNIVERSE_IDS.append(uid)
     i += 1
-
-
 
 intents = discord.Intents.default()
 intents.members = True
@@ -178,20 +174,17 @@ async def on_ready():
     ):
         await interaction.response.defer()
 
-        
         user_role_names = [r.name for r in interaction.user.roles]
         if not any(role in ALLOWED_ROLES for role in user_role_names):
             await interaction.followup.send("You do not have permission to use this command.")
             return
 
-        
         duration_seconds = parse_duration(duration)
         if duration_seconds is None and duration.strip() != "-1":
             await interaction.followup.send("Invalid duration. Use `1d 3h 10m` or `-1` for permanent.")
             return
 
         async with aiohttp.ClientSession() as session:
-            
             if method.value == "user-id":
                 if not value.isdigit():
                     await interaction.followup.send("Invalid format: user-id must be a number.")
@@ -203,7 +196,6 @@ async def on_ready():
                     await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
                     return
 
-            
             user_info = await get_roblox_user_info(session, user_id)
             avatar_url = await get_roblox_user_avatar(session, user_id)
             friends = await get_roblox_friends_count(session, user_id)
@@ -213,24 +205,22 @@ async def on_ready():
             username = user_info.get("name", "Unknown") if user_info else "Unknown"
             display_name = user_info.get("displayName", username) if user_info else username
 
-            
             results = []
             for uid in UNIVERSE_IDS:
                 ok, err = await ban_in_universe(session, user_id, reason, duration_seconds, uid)
                 results.append((uid, ok, err))
 
         failed = [(uid, err) for uid, ok, err in results if not ok]
-
         profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
         ban_timestamp = int(datetime.now(timezone.utc).timestamp())
+        desc = "{} Friends  **|**  {:,} Followers  **|**  {} Following\n\n<t:{}:F>".format(
+            friends, followers, following, ban_timestamp
+        )
+
         embed = discord.Embed(
             title="{} (@{})".format(display_name, username),
             url=profile_url,
-            description="{} Friends  **|**  {:,} Followers  **|**  {} Following"
-
-<t:{}:F>".format(
-                friends, followers, following, ban_timestamp
-            ),
+            description=desc,
             color=0x99aab5 if not failed else 0xe74c3c
         )
 
@@ -252,8 +242,7 @@ async def on_ready():
         if failed:
             embed.add_field(
                 name="⚠️ Failed",
-                value="
-".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed]),
+                value="\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed]),
                 inline=False
             )
 
