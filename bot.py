@@ -213,8 +213,21 @@ async def on_ready():
         failed = [(uid, err) for uid, ok, err in results if not ok]
         profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
         ban_timestamp = int(datetime.now(timezone.utc).timestamp())
-        desc = "{} Friends  **|**  {:,} Followers  **|**  {} Following\n\n<t:{}:F>".format(
-            friends, followers, following, ban_timestamp
+        profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+        friends_url = "https://www.roblox.com/users/{}/friends#!/friends".format(user_id)
+        followers_url = "https://www.roblox.com/users/{}/friends#!/followers".format(user_id)
+        following_url = "https://www.roblox.com/users/{}/friends#!/following".format(user_id)
+
+        desc = (
+            "[**{} (@{})**]({})\n\n"
+            "[**{} Friends**]({})  **|**  "
+            "[**{:,} Followers**]({})  **|**  "
+            "[**{} Following**]({})"
+        ).format(
+            display_name, username, profile_url,
+            friends, friends_url,
+            followers, followers_url,
+            following, following_url
         )
 
         embed = discord.Embed(
@@ -246,7 +259,16 @@ async def on_ready():
                 inline=False
             )
 
-        embed.set_footer(text="ID: {}".format(user_id))
+        embed.set_footer(
+            text="ID: {}".format(user_id)
+        )
+
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+
+        embed.set_footer(
+            text="ID: {} • <t:{}:F>".format(user_id, timestamp)
+        )
+        
         await interaction.followup.send(embed=embed)
 
     await bot.tree.sync(guild=guild)
