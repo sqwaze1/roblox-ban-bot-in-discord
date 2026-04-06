@@ -253,6 +253,94 @@ async def on_ready():
         embed.set_footer(text="ID: {}".format(user_id))
         await interaction.followup.send(embed=embed)
 
+
+    @bot.tree.command(name="runban", description="Unban a Roblox player from your game", guild=guild)
+    @app_commands.describe(
+        method="How to find the player: user-id or user-name",
+        value="Player Roblox ID or username"
+    )
+    @app_commands.choices(
+        method=[
+            app_commands.Choice(name="user-id", value="user-id"),
+            app_commands.Choice(name="user-name", value="user-name"),
+        ]
+    )
+    async def runban_command(
+        interaction: discord.Interaction,
+        method: app_commands.Choice[str],
+        value: str
+    ):
+        await interaction.response.defer()
+ 
+        user_role_names = [r.name for r in interaction.user.roles]
+        if not any(role in ALLOWED_ROLES for role in user_role_names):
+            await interaction.followup.send("You do not have permission to use this command.")
+            return
+ 
+        async with aiohttp.ClientSession() as session:
+            if method.value == "user-id":
+                if not value.isdigit():
+                    await interaction.followup.send("Invalid format: user-id must be a number.")
+                    return
+                user_id = int(value)
+            else:
+                user_id = await get_user_id_by_name(session, value)
+                if not user_id:
+                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
+                    return
+ 
+            user_info = await get_roblox_user_info(session, user_id)
+            avatar_url = await get_roblox_user_avatar(session, user_id)
+            friends = await get_roblox_friends_count(session, user_id)
+            followers = await get_roblox_followers_count(session, user_id)
+            following = await get_roblox_following_count(session, user_id)
+ 
+            username = user_info.get("name", "Unknown") if user_info else "Unknown"
+            display_name = user_info.get("displayName", username) if user_info else username
+ 
+            results = []
+            for uid in UNIVERSE_IDS:
+                ok, err = await unban_in_universe(session, user_id, uid)
+                results.append((uid, ok, err))
+ 
+            failed = [(uid, err) for uid, ok, err in results if not ok]
+            profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+            friends_url = "https://www.roblox.com/users/{}/friends".format(user_id)
+            followers_url = "https://www.roblox.com/users/{}/followers".format(user_id)
+            following_url = "https://www.roblox.com/users/{}/following".format(user_id)
+            desc = "[**{}**]({}) Friends  **|**  [**{:,}**]({}) Followers  **|**  [**{}**]({}) Following".format(
+            friends, friends_url, followers, followers_url, following, following_url
+            )
+ 
+            embed = discord.Embed(
+                title="**{} (@{})**".format(display_name, username),
+                url=profile_url,
+                description=desc,
+                timestamp=datetime.now(timezone.utc),
+                color=0x57f287 if not failed else 0xe74c3c
+            )
+ 
+            if avatar_url:
+                embed.set_thumbnail(url=avatar_url)
+ 
+            embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
+            embed.add_field(
+                name="🎮 Places",
+                value="{}/{} unbanned".format(len(results) - len(failed), len(results)),
+                inline=True
+            )
+ 
+            if failed:
+                embed.add_field(
+                    name="⚠️ Failed",
+                    value="".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed]),
+                    inline=False
+                )
+ 
+            embed.set_footer(text="ID: {}".format(user_id))
+            await interaction.followup.send(embed=embed)
+
+    
     await bot.tree.sync(guild=guild)
     print("Commands synced to guild {}.".format(GUILD_ID))
 
