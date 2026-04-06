@@ -15,8 +15,8 @@ ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
 ALLOWED_ROLES = [
     "OG",
-    "",
-    "",
+    "Moderator",
+    "Admin",
 ]
 
 UNIVERSE_IDS = []
@@ -212,15 +212,18 @@ async def on_ready():
 
         failed = [(uid, err) for uid, ok, err in results if not ok]
         profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
-        ban_timestamp = int(datetime.now(timezone.utc).timestamp())
-        desc = "{} Friends  **|**  {:,} Followers  **|**  {} Following\n\n<t:{}:F>".format(
-            friends, followers, following, ban_timestamp
+        friends_url = "https://www.roblox.com/users/{}/friends".format(user_id)
+        followers_url = "https://www.roblox.com/users/{}/followers".format(user_id)
+        following_url = "https://www.roblox.com/users/{}/following".format(user_id)
+        desc = "[**{}**]({}) Friends  **|**  [**{:,}**]({}) Followers  **|**  [**{}**]({}) Following".format(
+            friends, friends_url, followers, followers_url, following, following_url
         )
 
         embed = discord.Embed(
-            title="{} (@{})".format(display_name, username),
+            title="**{} (@{})**".format(display_name, username),
             url=profile_url,
             description=desc,
+            timestamp=datetime.now(timezone.utc),
             color=0x99aab5 if not failed else 0xe74c3c
         )
 
