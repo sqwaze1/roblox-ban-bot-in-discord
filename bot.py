@@ -23,9 +23,10 @@ ALLOWED_ROLES = [
 UNIVERSE_IDS = []
 i = 1
 while True:
-    uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
-    if not uid:
-        break
+    uid = ""
+        while not uid
+        uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
+        time.sleep(0.5)
     UNIVERSE_IDS.append(uid)
     i += 1
 
@@ -130,10 +131,10 @@ async def ban_in_universe(session, user_id, reason, duration_seconds, universe_i
     }
     restriction = {
         "active": True,
-        "privateReason": reason,
-        "displayReason": reason,
+        "privateReason": reason or "Reason not provided",
+        "displayReason": reason or "You have been banned from Murder Mystery 2.",
         "excludeAltAccounts": False,
-        "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
+        "duration": "{}s".format(duration_seconds) if duration_seconds is not None else -1,
     }
     async with session.patch(url, headers=headers, json={"gameJoinRestriction": restriction}) as resp:
         if resp.status in (200, 201):
