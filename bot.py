@@ -204,80 +204,7 @@ async def on_ready():
     bot.tree.clear_commands(guild=None)
     await bot.tree.sync(guild=None)
 
-    @bot.tree.command(name="rban", description="Ban a Roblox player from your game", guild=guild)
-    @app_commands.describe(
-        method="How to find the player: user-id or user-name",
-        value="Player Roblox ID or username",
-        reason="Reason for the ban",
-        duration="Duration: e.g. 1d 3h 10m or -1 for permanent",
-        evidence="Optional link to forum post or evidence"
-    )
-    @app_commands.choices(
-        method=[
-            app_commands.Choice(name="user-id", value="user-id"),
-            app_commands.Choice(name="user-name", value="user-name"),
-        ]
-    )
-    async def rban_command(
-        interaction: discord.Interaction,
-        method: app_commands.Choice[str],
-        value: str,
-        reason: str,
-        duration: str,
-        evidence: str = None
-    ):
-        await interaction.response.defer()
-
-        user_role_names = [r.name for r in interaction.user.roles]
-        if not any(role in ALLOWED_ROLES for role in user_role_names):
-            await interaction.followup.send("You do not have permission to use this command.")
-            return
-
-        duration_seconds = parse_duration(duration)
-        if duration_seconds is None and duration.strip() != "-1":
-            await interaction.followup.send("Invalid duration. Use `1d 3h 10m` or `-1` for permanent.")
-            return
-
-        async with aiohttp.ClientSession() as session:
-            if method.value == "user-id":
-                if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.")
-                    return
-                user_id = int(value)
-            else:
-                user_id = await get_user_id_by_name(session, value)
-                if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
-                    return
-
-            username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
-
-            results = []
-            for uid in UNIVERSE_IDS:
-                ok, err = await ban_in_universe(session, user_id, reason, duration_seconds, uid)
-                results.append((uid, ok, err))
-
-        failed = [(uid, err) for uid, ok, err in results if not ok]
-        embed = build_user_embed(
-            user_id, display_name, username, avatar_url,
-            friends, followers, following,
-            0x99aab5 if not failed else 0xe74c3c
-        )
-        embed.add_field(name="⏱ Duration", value=format_duration(duration), inline=True)
-        embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-        embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
-        embed.add_field(name="📋 Reason", value=reason, inline=False)
-        if evidence:
-            embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
-        if failed:
-            embed.add_field(
-                name="⚠️ Failed",
-                value="\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed]),
-                inline=False
-            )
-        await interaction.followup.send(embed=embed)
-
-    @bot.tree.command(name="runban", description="Unban a Roblox player from your game", guild=guild)
+    @bot.tree.command(name="unban", description="Unban a Roblox player from your game", guild=guild)
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
         value="Player Roblox ID or username"
@@ -288,7 +215,7 @@ async def on_ready():
             app_commands.Choice(name="user-name", value="user-name"),
         ]
     )
-    async def runban_command(
+    async def unban_command(
         interaction: discord.Interaction,
         method: app_commands.Choice[str],
         value: str
@@ -335,7 +262,7 @@ async def on_ready():
             )
         await interaction.followup.send(embed=embed)
 
-    @bot.tree.command(name="explban", description="Permanently ban a Roblox exploiter from your game", guild=guild)
+    @bot.tree.command(name="ban", description="Permanently ban a Roblox exploiter from your game", guild=guild)
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
         value="Player Roblox ID or username",
@@ -347,7 +274,7 @@ async def on_ready():
             app_commands.Choice(name="user-name", value="user-name"),
         ]
     )
-    async def explban_command(
+    async def ban_command(
         interaction: discord.Interaction,
         method: app_commands.Choice[str],
         value: str,
