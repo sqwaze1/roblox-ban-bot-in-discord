@@ -183,8 +183,8 @@ return embed
 
 @bot.event
 async def on_ready():
-print(“Bot ready: {}”.format(bot.user))
-print(“Loaded {} universe(s)”.format(len(UNIVERSE_IDS)))
+print("Bot ready: {}".format(bot.user))
+print("Loaded {} universe(s)".format(len(UNIVERSE_IDS)))
 
 ```
 guild = discord.Object(id=GUILD_ID)
