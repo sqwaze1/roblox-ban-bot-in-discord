@@ -23,10 +23,9 @@ ALLOWED_ROLES = [
 UNIVERSE_IDS = []
 i = 1
 while True:
-    uid = ""
-        while not uid
-        uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
-        time.sleep(0.5)
+    uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
+    if not uid:
+        break
     UNIVERSE_IDS.append(uid)
     i += 1
 
