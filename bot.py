@@ -24,10 +24,16 @@ UNIVERSE_IDS = []
 i = 1
 while True:
     uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
-    if not uid:
+
+    if not uid
+        while not uid
+        uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
+        if uid
         break
-    UNIVERSE_IDS.append(uid)
-    i += 1
+        time.sleep(0.5) 
+    else
+        UNIVERSE_IDS.append(uid)
+        i += 1
 
 intents = discord.Intents.default()
 intents.members = True
