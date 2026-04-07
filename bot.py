@@ -61,7 +61,7 @@ elif unit == "h":
 parts.append("{} hour{}".format(value, "s" if int(value) != 1 else ""))
 elif unit == "m":
 parts.append("{} minute{}".format(value, "s" if int(value) != 1 else ""))
-return “, “.join(parts) if parts else "Unknown"
+return ", ".join(parts) if parts else "Unknown"
 
 async def get_roblox_user_info(session, user_id):
 url = "https://users.roblox.com/v1/users/{}".format(user_id)
