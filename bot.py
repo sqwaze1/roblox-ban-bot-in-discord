@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DISCORD_TOKEN = os.getenv(“DISCORD_TOKEN”)
-GUILD_ID = int(os.getenv(“GUILD_ID”, “0”))
-ROBLOX_API_KEY = os.getenv(“ROBLOX_API_KEY”)
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID", "0"))
+ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
 
 ALLOWED_ROLES = [
     "Owner",
@@ -23,11 +23,11 @@ ALLOWED_ROLES = [
 UNIVERSE_IDS = []
 i = 1
 while True:
-uid = os.getenv(“UNIVERSE_ID_{}”.format(i), “”)
-if not uid:
-break
-UNIVERSE_IDS.append(uid)
-i += 1
+    uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
+    if not uid:
+        break
+    UNIVERSE_IDS.append(uid)
+    i += 1
 
 intents = discord.Intents.default()
 intents.members = True
@@ -378,7 +378,7 @@ async def explban_command(
     embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
     embed.add_field(name="📋 Reason", value="Exploits.", inline=False)
     if evidence:
-        embed.add_field(name="🔗 Proof", value=evidence, inline=False)
+        embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
     if failed:
         embed.add_field(
             name="⚠️ Failed",
