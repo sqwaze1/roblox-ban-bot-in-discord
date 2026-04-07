@@ -58,7 +58,7 @@ for value, unit in pattern:
 if unit == "d":
 parts.append("{} day{}".format(value, "s" if int(value) != 1 else ""))
 elif unit == "h":
-parts.append(”{} hour{}”.format(value, "s" if int(value) != 1 else ""))
+parts.append("{} hour{}".format(value, "s" if int(value) != 1 else ""))
 elif unit == "m":
 parts.append("{} minute{}".format(value, "s" if int(value) != 1 else ""))
 return “, “.join(parts) if parts else "Unknown"
