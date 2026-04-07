@@ -32,121 +32,121 @@ while True:
 intents = discord.Intents.default()
 intents.members = True
 
-bot = commands.Bot(command_prefix=”!”, intents=intents, help_command=None)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 def parse_duration(duration_str):
-if duration_str.strip() == “-1”:
+if duration_str.strip() == "-1":
 return None
 total_seconds = 0
-pattern = re.findall(r”(\d+)\s*([dhm])”, duration_str.lower())
+pattern = re.findall(r"(\d+)\s*([dhm]", duration_str.lower())
 for value, unit in pattern:
 value = int(value)
-if unit == “d”:
+if unit == "d":
 total_seconds += value * 86400
-elif unit == “h”:
+elif unit == "h":
 total_seconds += value * 3600
-elif unit == “m”:
+elif unit == "m":
 total_seconds += value * 60
 return total_seconds if total_seconds > 0 else None
 
 def format_duration(duration_str):
-if duration_str.strip() == “-1”:
-return “Permanent”
+if duration_str.strip() == "-1":
+return "Permanent"
 parts = []
-pattern = re.findall(r”(\d+)\s*([dhm])”, duration_str.lower())
+pattern = re.findall(r"(\d+)\s*([dhm])", duration_str.lower())
 for value, unit in pattern:
-if unit == “d”:
-parts.append(”{} day{}”.format(value, “s” if int(value) != 1 else “”))
-elif unit == “h”:
-parts.append(”{} hour{}”.format(value, “s” if int(value) != 1 else “”))
-elif unit == “m”:
-parts.append(”{} minute{}”.format(value, “s” if int(value) != 1 else “”))
-return “, “.join(parts) if parts else “Unknown”
+if unit == "d":
+parts.append("{} day{}".format(value, "s" if int(value) != 1 else ""))
+elif unit == "h":
+parts.append(”{} hour{}”.format(value, "s" if int(value) != 1 else ""))
+elif unit == "m":
+parts.append("{} minute{}".format(value, "s" if int(value) != 1 else ""))
+return “, “.join(parts) if parts else "Unknown"
 
 async def get_roblox_user_info(session, user_id):
-url = “https://users.roblox.com/v1/users/{}”.format(user_id)
+url = "https://users.roblox.com/v1/users/{}".format(user_id)
 async with session.get(url) as resp:
 if resp.status == 200:
 return await resp.json()
 return None
 
 async def get_roblox_user_avatar(session, user_id):
-url = “https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={}&size=150x150&format=Png”.format(user_id)
+url "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={}&size=150x150&format=Png".format(user_id)
 async with session.get(url) as resp:
 if resp.status == 200:
 data = await resp.json()
-items = data.get(“data”, [])
+items = data.get("data", [])
 if items:
-return items[0].get(“imageUrl”)
+return items[0].get("imageUrl")
 return None
 
 async def get_roblox_friends_count(session, user_id):
-url = “https://friends.roblox.com/v1/users/{}/friends/count”.format(user_id)
+url = "https://friends.roblox.com/v1/users/{}/friends/count".format(user_id)
 async with session.get(url) as resp:
 if resp.status == 200:
-return (await resp.json()).get(“count”, 0)
+return (await resp.json()).get("count", 0)
 return 0
 
 async def get_roblox_followers_count(session, user_id):
-url = “https://friends.roblox.com/v1/users/{}/followers/count”.format(user_id)
+url = "https://friends.roblox.com/v1/users/{}/followers/count".format(user_id)
 async with session.get(url) as resp:
 if resp.status == 200:
-return (await resp.json()).get(“count”, 0)
+return (await resp.json()).get("count", 0)
 return 0
 
 async def get_roblox_following_count(session, user_id):
-url = “https://friends.roblox.com/v1/users/{}/followings/count”.format(user_id)
+url = "https://friends.roblox.com/v1/users/{}/followings/count".format(user_id)
 async with session.get(url) as resp:
 if resp.status == 200:
-return (await resp.json()).get(“count”, 0)
+return (await resp.json()).get("count", 0)
 return 0
 
 async def get_user_id_by_name(session, username):
-url = “https://users.roblox.com/v1/usernames/users”
-payload = {“usernames”: [username], “excludeBannedUsers”: False}
+url = "https://users.roblox.com/v1/usernames/users"
+payload = {"usernames": [username], "excludeBannedUsers": False}
 async with session.post(url, json=payload) as resp:
 if resp.status != 200:
 return None
 data = await resp.json()
-users = data.get(“data”, [])
-return users[0][“id”] if users else None
+users = data.get("data", [])
+return users[0]["id"] if users else None
 
 async def ban_in_universe(session, user_id, reason, duration_seconds, universe_id):
-url = “https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}”.format(
+url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
 universe_id, user_id
 )
 headers = {
-“x-api-key”: ROBLOX_API_KEY,
-“Content-Type”: “application/json”,
+"x-api-key": ROBLOX_API_KEY,
+"Content-Type": "application/json",
 }
 restriction = {
-“active”: True,
-“privateReason”: reason,
-“displayReason”: reason,
-“excludeAltAccounts”: False,
-“duration”: “{}s”.format(duration_seconds) if duration_seconds is not None else None,
+"active": True,
+"privateReason": reason,
+"displayReason": reason,
+"excludeAltAccounts": False,
+"duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
 }
-async with session.patch(url, headers=headers, json={“gameJoinRestriction”: restriction}) as resp:
+async with session.patch(url, headers=headers, json={"gameJoinRestriction": restriction}) as resp:
 if resp.status in (200, 201):
 return True, None
 return False, await resp.text()
 
 async def unban_in_universe(session, user_id, universe_id):
-url = “https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}”.format(
+url = "https://apis.roblox.com/cloud/v2/universes/{}/user-restrictions/{}".format(
 universe_id, user_id
 )
 headers = {
-“x-api-key”: ROBLOX_API_KEY,
-“Content-Type”: “application/json”,
+"x-api-key": ROBLOX_API_KEY,
+"Content-Type": "application/json",
 }
 restriction = {
-“active”: False,
-“privateReason”: “”,
-“displayReason”: “”,
-“excludeAltAccounts”: False,
-“duration”: None,
+"active": False,
+"privateReason": "",
+"displayReason": "",
+"excludeAltAccounts": False,
+"duration": None,
 }
-async with session.patch(url, headers=headers, json={“gameJoinRestriction”: restriction}) as resp:
+async with session.patch(url, headers=headers, json={"gameJoinRestriction": restriction}) as resp:
 if resp.status in (200, 201):
 return True, None
 return False, await resp.text()
@@ -157,20 +157,20 @@ avatar_url = await get_roblox_user_avatar(session, user_id)
 friends = await get_roblox_friends_count(session, user_id)
 followers = await get_roblox_followers_count(session, user_id)
 following = await get_roblox_following_count(session, user_id)
-username = user_info.get(“name”, “Unknown”) if user_info else “Unknown”
-display_name = user_info.get(“displayName”, username) if user_info else username
+username = user_info.get("name", "Unknown") if user_info else "Unknown"
+display_name = user_info.get("displayName", username) if user_info else username
 return username, display_name, avatar_url, friends, followers, following
 
 def build_user_embed(user_id, display_name, username, avatar_url, friends, followers, following, color):
-profile_url = “https://www.roblox.com/users/{}/profile”.format(user_id)
-friends_url = “https://www.roblox.com/users/{}/friends”.format(user_id)
-followers_url = “https://www.roblox.com/users/{}/followers”.format(user_id)
-following_url = “https://www.roblox.com/users/{}/following”.format(user_id)
-desc = “[**{}**]({}) Friends  **|**  [**{:,}**]({}) Followers  **|**  [**{}**]({}) Following”.format(
+profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+friends_url = "https://www.roblox.com/users/{}/friends".format(user_id)
+followers_url = "https://www.roblox.com/users/{}/followers".format(user_id)
+following_url = "https://www.roblox.com/users/{}/following".format(user_id)
+desc = "[**{}**]({}) Friends  **|**  [**{:,}**]({}) Followers  **|**  [**{}**]({}) Following".format(
 friends, friends_url, followers, followers_url, following, following_url
 )
 embed = discord.Embed(
-title=”**{} (@{})**”.format(display_name, username),
+title="**{} (@{})**".format(display_name, username),
 url=profile_url,
 description=desc,
 timestamp=datetime.now(timezone.utc),
@@ -178,7 +178,7 @@ color=color
 )
 if avatar_url:
 embed.set_thumbnail(url=avatar_url)
-embed.set_footer(text=“ID: {}”.format(user_id))
+embed.set_footer(text="ID: {}".format(user_id))
 return embed
 
 @bot.event
