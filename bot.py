@@ -25,13 +25,13 @@ i = 1
 while True:
     uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
 
-    if not uid
-        while not uid
+    if not uid:
+        while not uid:
         uid = os.getenv("UNIVERSE_ID_{}".format(i), "")
-        if uid
+        if uid:
         break
         time.sleep(0.5) 
-    else
+    else:
         UNIVERSE_IDS.append(uid)
         i += 1
 
