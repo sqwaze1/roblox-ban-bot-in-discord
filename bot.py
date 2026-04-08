@@ -315,7 +315,7 @@ async def on_ready():
         embed.add_field(name="⏱ Duration", value="Permanent", inline=True)
         embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
         embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
-        embed.add_field(name="📋 Reason", value="Exploits.", inline=False)
+        embed.add_field(name="📋 Reason", value="You have been banned from Murder Mystery 2.", inline=False)
         if evidence:
             embed.add_field(name="🔗 Proof", value=evidence, inline=False)
         if failed:
