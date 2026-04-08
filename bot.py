@@ -133,7 +133,7 @@ async def ban_in_universe(session, user_id, reason, duration_seconds, universe_i
         "privateReason": reason or "Reason not provided",
         "displayReason": reason or "You have been banned from Murder Mystery 2.",
         "excludeAltAccounts": False,
-        "duration": "{}s".format(duration_seconds) if duration_seconds is not None else -1,
+        "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
     }
     async with session.patch(url, headers=headers, json={"gameJoinRestriction": restriction}) as resp:
         if resp.status in (200, 201):
