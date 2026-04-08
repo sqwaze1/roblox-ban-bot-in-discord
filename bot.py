@@ -317,7 +317,7 @@ async def on_ready():
         embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
         embed.add_field(name="📋 Reason", value="Exploits.", inline=False)
         if evidence:
-            embed.add_field(name="🔗 Evidence", value=evidence, inline=False)
+            embed.add_field(name="🔗 Proof", value=evidence, inline=False)
         if failed:
             embed.add_field(
                 name="⚠️ Failed",
