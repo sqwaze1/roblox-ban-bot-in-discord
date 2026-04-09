@@ -131,7 +131,7 @@ async def ban_in_universe(session, user_id, reason, duration_seconds, universe_i
     restriction = {
         "active": True,
         "privateReason": reason or "Reason not provided",
-        "displayReason": reason or "You have been banned from Murder Mystery 2.",
+        "displayReason": "You have been banned from Murder Mystery 2.",
         "excludeAltAccounts": False,
         "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
     }
@@ -204,7 +204,12 @@ async def on_ready():
     bot.tree.clear_commands(guild=None)
     await bot.tree.sync(guild=None)
 
-    @bot.tree.command(name="unban", description="Unban a Roblox player from your game", guild=guild)
+    @bot.tree.command(
+        name="unban",
+        description="Unban a Roblox player from your game",
+        guild=guild,
+        default_member_permissions=discord.Permissions(kick_members=True)
+    )
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
         value="Player Roblox ID or username"
@@ -224,19 +229,19 @@ async def on_ready():
 
         user_role_names = [r.name for r in interaction.user.roles]
         if not any(role in ALLOWED_ROLES for role in user_role_names):
-            await interaction.followup.send("You do not have permission to use this command.")
+            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
             return
 
         async with aiohttp.ClientSession() as session:
             if method.value == "user-id":
                 if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.")
+                    await interaction.followup.send("Invalid format: user-id must be a number.", ephemeral=True)
                     return
                 user_id = int(value)
             else:
                 user_id = await get_user_id_by_name(session, value)
                 if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
+                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value), ephemeral=True)
                     return
 
             username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
@@ -262,7 +267,12 @@ async def on_ready():
             )
         await interaction.followup.send(embed=embed)
 
-    @bot.tree.command(name="ban", description="Permanently ban a Roblox exploiter from your game", guild=guild)
+    @bot.tree.command(
+        name="ban",
+        description="Permanently ban a Roblox exploiter from your game",
+        guild=guild,
+        default_member_permissions=discord.Permissions(kick_members=True)
+    )
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
         value="Player Roblox ID or username",
@@ -284,19 +294,19 @@ async def on_ready():
 
         user_role_names = [r.name for r in interaction.user.roles]
         if not any(role in ALLOWED_ROLES for role in user_role_names):
-            await interaction.followup.send("You do not have permission to use this command.")
+            await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
             return
 
         async with aiohttp.ClientSession() as session:
             if method.value == "user-id":
                 if not value.isdigit():
-                    await interaction.followup.send("Invalid format: user-id must be a number.")
+                    await interaction.followup.send("Invalid format: user-id must be a number.", ephemeral=True)
                     return
                 user_id = int(value)
             else:
                 user_id = await get_user_id_by_name(session, value)
                 if not user_id:
-                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value))
+                    await interaction.followup.send("User **{}** was not found on Roblox.".format(value), ephemeral=True)
                     return
 
             username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
@@ -315,7 +325,6 @@ async def on_ready():
         embed.add_field(name="⏱ Duration", value="Permanent", inline=True)
         embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
         embed.add_field(name="🎮 Places", value="{}/{} banned".format(len(results) - len(failed), len(results)), inline=True)
-        embed.add_field(name="📋 Reason", value="You have been banned from Murder Mystery 2.", inline=False)
         if evidence:
             embed.add_field(name="🔗 Proof", value=evidence, inline=False)
         if failed:
