@@ -208,7 +208,6 @@ async def on_ready():
         name="unban",
         description="Unban a Roblox player from your game",
         guild=guild,
-        default_member_permissions=discord.Permissions(kick_members=True)
     )
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
@@ -271,7 +270,6 @@ async def on_ready():
         name="ban",
         description="Permanently ban a Roblox exploiter from your game",
         guild=guild,
-        default_member_permissions=discord.Permissions(kick_members=True)
     )
     @app_commands.describe(
         method="How to find the player: user-id or user-name",
