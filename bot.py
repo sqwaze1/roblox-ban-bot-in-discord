@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from datetime import datetime, timezone
@@ -13,6 +14,15 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 ROBLOX_API_KEY = os.getenv("ROBLOX_API_KEY")
+
+if not DISCORD_TOKEN:
+    raise ValueError("Missing DISCORD_TOKEN in environment variables.")
+
+if not ROBLOX_API_KEY:
+    raise ValueError("Missing ROBLOX_API_KEY in environment variables.")
+
+if not GUILD_ID:
+    raise ValueError("Missing or invalid GUILD_ID in environment variables.")
 
 ALLOWED_ROLES = [
     "Owner",
@@ -34,41 +44,6 @@ intents = discord.Intents.default()
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
-
-
-def parse_duration(duration_str):
-    if duration_str.strip() == "-1":
-        return None
-
-    total_seconds = 0
-    pattern = re.findall(r"(\d+)\s*([dhm])", duration_str.lower())
-    for value, unit in pattern:
-        value = int(value)
-        if unit == "d":
-            total_seconds += value * 86400
-        elif unit == "h":
-            total_seconds += value * 3600
-        elif unit == "m":
-            total_seconds += value * 60
-
-    return total_seconds if total_seconds > 0 else None
-
-
-def format_duration(duration_str):
-    if duration_str.strip() == "-1":
-        return "Permanent"
-
-    parts = []
-    pattern = re.findall(r"(\d+)\s*([dhm])", duration_str.lower())
-    for value, unit in pattern:
-        if unit == "d":
-            parts.append("{} day{}".format(value, "s" if int(value) != 1 else ""))
-        elif unit == "h":
-            parts.append("{} hour{}".format(value, "s" if int(value) != 1 else ""))
-        elif unit == "m":
-            parts.append("{} minute{}".format(value, "s" if int(value) != 1 else ""))
-
-    return ", ".join(parts) if parts else "Unknown"
 
 
 def has_allowed_role(member):
@@ -419,7 +394,7 @@ async def on_ready():
 
     @bot.tree.command(
         name="bannew",
-        description="Copy active bans into configured universes that currently have no bans",
+        description="Sync missing bans between all configured universes",
         guild=guild,
     )
     async def bannew_command(interaction: discord.Interaction):
@@ -431,15 +406,14 @@ async def on_ready():
 
         if not UNIVERSE_IDS:
             await interaction.followup.send(
-                "No universes were found. Add `UNIVERSE_ID_1`, `UNIVERSE_ID_2`, and so on to your environment.",
+                "I couldn't find any universe IDs.",
                 ephemeral=True,
             )
             return
 
         async with aiohttp.ClientSession() as session:
-            discovered_bans = {}
-            source_universe_ids = []
-            empty_universe_ids = []
+            universe_bans = {}
+            all_bans = {}
             source_errors = []
 
             for universe_id in UNIVERSE_IDS:
@@ -448,49 +422,52 @@ async def on_ready():
                     source_errors.append((universe_id, source_err))
                     continue
 
-                active_users = {}
-
+                current_bans = {}
                 for item in restrictions:
                     game_join = item.get("gameJoinRestriction") or {}
                     if game_join.get("active") is not True:
                         continue
 
                     user_id = restriction_user_id(item)
-                    if user_id and str(user_id).isdigit():
-                        active_users[str(user_id)] = game_join
-                        if str(user_id) not in discovered_bans:
-                            discovered_bans[str(user_id)] = {
-                                "restriction": game_join,
-                                "source_universe_id": universe_id,
-                            }
+                    if not user_id or not str(user_id).isdigit():
+                        continue
 
-                if active_users:
-                    source_universe_ids.append(universe_id)
-                else:
-                    empty_universe_ids.append(universe_id)
+                    current_bans[str(user_id)] = game_join
 
-            if not source_universe_ids and not source_errors:
+                    if str(user_id) not in all_bans:
+                        all_bans[str(user_id)] = {
+                            "restriction": game_join,
+                            "source_universe_id": universe_id,
+                        }
+
+                universe_bans[universe_id] = current_bans
+
+            if not all_bans and not source_errors:
                 await interaction.followup.send(
-                    "I checked all configured universes and none of them have active bans right now.",
-                    ephemeral=True,
-                )
-                return
-
-            if not empty_universe_ids:
-                await interaction.followup.send(
-                    "I checked all configured universes and there are no empty targets. Every configured universe already has at least one active ban.",
+                    "Looks like there aren't any active bans to sync right now.",
                     ephemeral=True,
                 )
                 return
 
             results = []
-            for target_universe_id in empty_universe_ids:
-                for user_id, item in discovered_bans.items():
+            already_synced = []
+
+            for target_universe_id in UNIVERSE_IDS:
+                if target_universe_id not in universe_bans:
+                    continue
+
+                target_bans = universe_bans[target_universe_id]
+
+                for user_id, item in all_bans.items():
+                    if user_id in target_bans:
+                        already_synced.append((user_id, target_universe_id))
+                        continue
+
                     game_join = item["restriction"]
-                    ok, migrate_err = await apply_restriction_in_universe(
+                    ok, sync_err = await apply_restriction_in_universe(
                         session, user_id, game_join, target_universe_id
                     )
-                    results.append((user_id, item["source_universe_id"], target_universe_id, ok, migrate_err))
+                    results.append((user_id, item["source_universe_id"], target_universe_id, ok, sync_err))
 
         migrated = [
             (user_id, source_universe_id, target_universe_id)
@@ -498,31 +475,38 @@ async def on_ready():
             if ok
         ]
         failed = [
-            (user_id, source_universe_id, target_universe_id, migrate_err)
-            for user_id, source_universe_id, target_universe_id, ok, migrate_err in results
+            (user_id, source_universe_id, target_universe_id, sync_err)
+            for user_id, source_universe_id, target_universe_id, ok, sync_err in results
             if not ok
         ]
+
+        if not migrated and not failed:
+            await interaction.followup.send(
+                "Everything is already in sync. No new bans needed to be added.",
+                ephemeral=True,
+            )
+            return
 
         embed = discord.Embed(
             title="bannew finished",
             color=0x57F287 if not failed else 0xE67E22,
             timestamp=datetime.now(timezone.utc),
         )
-        embed.add_field(name="📚 Sources", value=str(len(source_universe_ids)), inline=True)
-        embed.add_field(name="📥 Empty targets", value=str(len(empty_universe_ids)), inline=True)
+        embed.add_field(name="🌍 Universes checked", value=str(len(UNIVERSE_IDS)), inline=True)
+        embed.add_field(name="📊 Unique banned users", value=str(len(all_bans)), inline=True)
         embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-        embed.add_field(name="📊 Active bans found", value=str(len(discovered_bans)), inline=True)
-        embed.add_field(name="🧩 Total copy attempts", value=str(len(results)), inline=True)
-        embed.add_field(name="✅ Migrated", value=str(len(migrated)), inline=True)
+        embed.add_field(name="✅ Added", value=str(len(migrated)), inline=True)
+        embed.add_field(name="🔁 Already there", value=str(len(already_synced)), inline=True)
         embed.add_field(name="❌ Failed", value=str(len(failed)), inline=True)
 
-        embed.add_field(
-            name="📤 Target universes",
-            value=trim_embed_value(
-                "\n".join(["`{}`".format(uid) for uid in empty_universe_ids]) if empty_universe_ids else "None"
-            ),
-            inline=False,
-        )
+        if migrated:
+            embed.add_field(
+                name="📥 Updated universes",
+                value=trim_embed_value(
+                    "\n".join(sorted(set(["`{}`".format(target_universe_id) for _, _, target_universe_id in migrated])))
+                ),
+                inline=False,
+            )
 
         if failed:
             embed.add_field(
@@ -531,9 +515,9 @@ async def on_ready():
                     "\n".join(
                         [
                             "User `{}` from `{}` to `{}`: {}".format(
-                                user_id, source_universe_id, target_universe_id, migrate_err
+                                user_id, source_universe_id, target_universe_id, sync_err
                             )
-                            for user_id, source_universe_id, target_universe_id, migrate_err in failed[:10]
+                            for user_id, source_universe_id, target_universe_id, sync_err in failed[:10]
                         ]
                     )
                 ),
@@ -542,7 +526,7 @@ async def on_ready():
 
         if source_errors:
             embed.add_field(
-                name="⚠️ Source read errors",
+                name="⚠️ Some universes couldn't be read",
                 value=trim_embed_value(
                     "\n".join(
                         [
@@ -560,4 +544,22 @@ async def on_ready():
     print("Commands synced to guild {}.".format(GUILD_ID))
 
 
-bot.run(DISCORD_TOKEN)
+async def main():
+    retry_delay = 60
+
+    while True:
+        try:
+            async with bot:
+                await bot.start(DISCORD_TOKEN)
+        except discord.HTTPException as e:
+            if e.status == 429:
+                print("Discord rate limited the bot login. Waiting {} seconds before retry.".format(retry_delay))
+                await asyncio.sleep(retry_delay)
+            else:
+                raise
+        except Exception as e:
+            print("Bot crashed: {}".format(e))
+            await asyncio.sleep(retry_delay)
+
+
+asyncio.run(main())
