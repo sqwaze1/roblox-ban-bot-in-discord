@@ -1,6 +1,5 @@
 import asyncio
 import os
-import re
 from datetime import datetime, timezone
 
 import aiohttp
@@ -54,6 +53,24 @@ def trim_embed_value(text, limit=1024):
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def chunk_lines(lines, limit=1024):
+    chunks = []
+    current = []
+
+    for line in lines:
+        candidate = "\n".join(current + [line])
+        if len(candidate) > limit and current:
+            chunks.append("\n".join(current))
+            current = [line]
+        else:
+            current.append(line)
+
+    if current:
+        chunks.append("\n".join(current))
+
+    return chunks
 
 
 def restriction_user_id(restriction):
@@ -125,6 +142,30 @@ async def get_user_id_by_name(session, username):
         data = await resp.json()
         users = data.get("data", [])
         return users[0]["id"] if users else None
+
+
+async def get_universe_info(session, universe_id):
+    url = "https://develop.roblox.com/v1/universes/{}".format(universe_id)
+    async with session.get(url) as resp:
+        if resp.status != 200:
+            return {
+                "name": "Universe {}".format(universe_id),
+                "url": "https://www.roblox.com/discover#/",
+            }
+
+        data = await resp.json()
+        name = data.get("name") or "Universe {}".format(universe_id)
+        root_place_id = data.get("rootPlaceId")
+
+        if root_place_id:
+            url = "https://www.roblox.com/games/{}".format(root_place_id)
+        else:
+            url = "https://www.roblox.com/discover#/"
+
+        return {
+            "name": name,
+            "url": url,
+        }
 
 
 async def list_user_restrictions(session, universe_id):
@@ -393,11 +434,11 @@ async def on_ready():
         await interaction.followup.send(embed=embed)
 
     @bot.tree.command(
-        name="bannew",
+        name="syncbans",
         description="Sync missing bans between all configured universes",
         guild=guild,
     )
-    async def bannew_command(interaction: discord.Interaction):
+    async def syncbans_command(interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
 
         if not has_allowed_role(interaction.user):
@@ -406,7 +447,7 @@ async def on_ready():
 
         if not UNIVERSE_IDS:
             await interaction.followup.send(
-                "I couldn't find any universe IDs.",
+                "I couldn't find any universe IDs in your config yet.",
                 ephemeral=True,
             )
             return
@@ -444,7 +485,7 @@ async def on_ready():
 
             if not all_bans and not source_errors:
                 await interaction.followup.send(
-                    "Looks like there aren't any active bans to sync right now.",
+                    "Right now there are no active bans to sync.",
                     ephemeral=True,
                 )
                 return
@@ -469,6 +510,10 @@ async def on_ready():
                     )
                     results.append((user_id, item["source_universe_id"], target_universe_id, ok, sync_err))
 
+            universe_info = {}
+            for universe_id in UNIVERSE_IDS:
+                universe_info[universe_id] = await get_universe_info(session, universe_id)
+
         migrated = [
             (user_id, source_universe_id, target_universe_id)
             for user_id, source_universe_id, target_universe_id, ok, _ in results
@@ -482,31 +527,34 @@ async def on_ready():
 
         if not migrated and not failed:
             await interaction.followup.send(
-                "Everything is already in sync. No new bans needed to be added.",
+                "Everything is already synced. Nothing new to add.",
                 ephemeral=True,
             )
             return
 
+        updates_by_universe = {}
+        for _, _, target_universe_id in migrated:
+            updates_by_universe[target_universe_id] = updates_by_universe.get(target_universe_id, 0) + 1
+
         embed = discord.Embed(
-            title="bannew finished",
+            title="syncbans finished",
             color=0x57F287 if not failed else 0xE67E22,
             timestamp=datetime.now(timezone.utc),
         )
-        embed.add_field(name="🌍 Universes checked", value=str(len(UNIVERSE_IDS)), inline=True)
-        embed.add_field(name="📊 Unique banned users", value=str(len(all_bans)), inline=True)
         embed.add_field(name="🛡 Moderator", value=interaction.user.mention, inline=True)
-        embed.add_field(name="✅ Added", value=str(len(migrated)), inline=True)
-        embed.add_field(name="🔁 Already there", value=str(len(already_synced)), inline=True)
-        embed.add_field(name="❌ Failed", value=str(len(failed)), inline=True)
 
-        if migrated:
-            embed.add_field(
-                name="📥 Updated universes",
-                value=trim_embed_value(
-                    "\n".join(sorted(set(["`{}`".format(target_universe_id) for _, _, target_universe_id in migrated])))
-                ),
-                inline=False,
-            )
+        if updates_by_universe:
+            update_lines = []
+            for universe_id, added_count in sorted(updates_by_universe.items(), key=lambda item: item[1], reverse=True):
+                info = universe_info.get(universe_id, {})
+                place_name = info.get("name", "Universe {}".format(universe_id))
+                place_url = info.get("url", "https://www.roblox.com/discover#/")
+                update_lines.append("**[{}]({})** - {} new ban(s)".format(place_name, place_url, added_count))
+
+            chunks = chunk_lines(update_lines)
+            for index, chunk in enumerate(chunks, start=1):
+                field_name = "📥 Updated places" if index == 1 else "📥 Updated places ({})".format(index)
+                embed.add_field(name=field_name, value=chunk, inline=False)
 
         if failed:
             embed.add_field(
