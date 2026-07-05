@@ -237,7 +237,7 @@ async def ban_in_universe(session, user_id, reason, duration_seconds, universe_i
     }
     restriction = {
         "active": True,
-        "privateReason": reason or "Reason not provided",
+        "privateReason": reason or "Discord report.",
         "displayReason": reason or "You have been banned from Murder Mystery 2. gg/kmm - Appeal",
         "excludeAltAccounts": False,
         "duration": "{}s".format(duration_seconds) if duration_seconds is not None else None,
@@ -317,6 +317,38 @@ def build_user_embed(user_id, display_name, username, avatar_url, friends, follo
     return embed
 
 
+class ConfirmView(discord.ui.View):
+    def __init__(self, action, owner_id):
+        super().__init__(timeout=30)
+        self.action = action
+        self.owner_id = owner_id
+        self.confirmed = False
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message("This is not your action.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction, button):
+        self.confirmed = True
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction, button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            content="{} cancelled.".format(self.action.capitalize()),
+            view=self,
+        )
+        self.stop()
+
+
 @bot.event
 async def on_ready():
     print("Bot ready: {}".format(bot.user))
@@ -328,9 +360,8 @@ async def on_ready():
     print("Synced {} command(s) to guild {}.".format(len(synced), GUILD_ID))
 
 
-# ── /unban ────────────────────────────────────────────────────────────────
-
 guild = discord.Object(id=GUILD_ID)
+
 
 @bot.tree.command(
     name="unban",
@@ -339,7 +370,7 @@ guild = discord.Object(id=GUILD_ID)
 )
 @app_commands.describe(username="Player Roblox username")
 async def unban_command(interaction: discord.Interaction, username: str):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     if not has_allowed_role(interaction.user):
         await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
         return
@@ -350,7 +381,24 @@ async def unban_command(interaction: discord.Interaction, username: str):
             await interaction.followup.send("User **{}** was not found on Roblox.".format(username), ephemeral=True)
             return
 
-        username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+        fetched_username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
+
+        profile_url = "https://www.roblox.com/users/{}/profile".format(user_id)
+        confirm_embed = discord.Embed(
+            title="Unban confirmation",
+            description="Are you sure you want to unban [**{} (@{})**]({})?\n-# This action will expire in 30 seconds.".format(display_name, fetched_username, profile_url),
+            color=0xFEE75C,
+            timestamp=datetime.now(timezone.utc),
+        )
+        if avatar_url:
+            confirm_embed.set_thumbnail(url=avatar_url)
+
+        view = ConfirmView("unban", interaction.user.id)
+        await interaction.followup.send(embed=confirm_embed, view=view, ephemeral=True)
+        await view.wait()
+
+        if not view.confirmed:
+            return
 
         results = []
         for uid in ALL_UNIVERSE_IDS:
@@ -360,7 +408,7 @@ async def unban_command(interaction: discord.Interaction, username: str):
         failed = [(uid, err) for uid, ok, err in results if not ok]
 
         embed = build_user_embed(
-            user_id, display_name, username, avatar_url,
+            user_id, display_name, fetched_username, avatar_url,
             friends, followers, following,
             0x57F287 if not failed else 0xE74C3C,
         )
@@ -376,10 +424,8 @@ async def unban_command(interaction: discord.Interaction, username: str):
                 value=trim_embed_value("\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed])),
                 inline=False,
             )
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
-
-# ── /ban ──────────────────────────────────────────────────────────────────
 
 @bot.tree.command(
     name="ban",
@@ -397,7 +443,7 @@ async def ban_command(
     reason: str = None,
     evidence: str = None,
 ):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
     if not has_allowed_role(interaction.user):
         await interaction.followup.send("You do not have permission to use this command.", ephemeral=True)
         return
@@ -408,7 +454,28 @@ async def ban_command(
             await interaction.followup.send("User **{}** was not found on Roblox.".format(username), ephemeral=True)
             return
 
-        username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, uid_int)
+        fetched_username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, uid_int)
+
+        profile_url = "https://www.roblox.com/users/{}/profile".format(uid_int)
+        confirm_embed = discord.Embed(
+            title="Ban confirmation",
+            description="Are you sure you want to ban [**{} (@{})**]({})?\n-# This action will expire in 30 seconds.".format(display_name, fetched_username, profile_url),
+            color=0xFEE75C,
+            timestamp=datetime.now(timezone.utc),
+        )
+        if avatar_url:
+            confirm_embed.set_thumbnail(url=avatar_url)
+        if reason:
+            confirm_embed.add_field(name="Reason", value=reason, inline=False)
+        if evidence:
+            confirm_embed.add_field(name="Evidence", value=evidence, inline=False)
+
+        view = ConfirmView("ban", interaction.user.id)
+        await interaction.followup.send(embed=confirm_embed, view=view, ephemeral=True)
+        await view.wait()
+
+        if not view.confirmed:
+            return
 
         results = []
         for uid in ALL_UNIVERSE_IDS:
@@ -418,7 +485,7 @@ async def ban_command(
         failed = [(uid, err) for uid, ok, err in results if not ok]
 
         embed = build_user_embed(
-            uid_int, display_name, username, avatar_url,
+            uid_int, display_name, fetched_username, avatar_url,
             friends, followers, following,
             0x99AAB5 if not failed else 0xE74C3C,
         )
@@ -439,16 +506,15 @@ async def ban_command(
                 value=trim_embed_value("\n".join(["Universe `{}`: {}".format(uid, err) for uid, err in failed])),
                 inline=False,
             )
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
-        
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
             current_name = thread.name
             if current_name.startswith("Exp:"):
-                new_name = "{}, {}".format(current_name, username)
+                new_name = "{}, {}".format(current_name, fetched_username)
             else:
-                new_name = "Exp: {}".format(username)
+                new_name = "Exp: {}".format(fetched_username)
             if len(new_name) > 100:
                 new_name = new_name[:97] + "..."
             try:
@@ -456,8 +522,6 @@ async def ban_command(
             except (discord.Forbidden, discord.HTTPException):
                 pass
 
-
-# ── /infoban ──────────────────────────────────────────────────────────────
 
 @bot.tree.command(
     name="infoban",
@@ -479,7 +543,6 @@ async def infoban_command(interaction: discord.Interaction, username: str):
 
         username, display_name, avatar_url, friends, followers, following = await fetch_user_data(session, user_id)
 
-        
         restriction_tasks = [get_user_restriction(session, user_id, uid) for uid in ALL_UNIVERSE_IDS]
         universe_info_tasks = [get_universe_info(session, uid) for uid in ALL_UNIVERSE_IDS]
 
@@ -500,7 +563,7 @@ async def infoban_command(interaction: discord.Interaction, username: str):
 
             start_time = game_join.get("startTime", "")
             duration = game_join.get("duration")
-            display_reason = game_join.get("displayReason", "")
+            display_reason = game_join.get("privateReason", "")
 
             if start_time:
                 try:
@@ -545,8 +608,6 @@ async def infoban_command(interaction: discord.Interaction, username: str):
 
         await interaction.followup.send(embed=embed)
 
-
-# ── /closerep ─────────────────────────────────────────────────────────────
 
 @bot.tree.command(
     name="closerep",
@@ -649,8 +710,6 @@ async def closerep_command(
     await channel.send(content=owner_mention, embed=embed)
     await interaction.followup.send("Report closed.", ephemeral=True)
 
-
-# ── /syncbans ─────────────────────────────────────────────────────────────
 
 @bot.tree.command(
     name="syncbans",
