@@ -90,7 +90,7 @@
 
 ###
 
-<h3 data-importer="text" align="left">📜 .env Template</h3>
+<h3 data-importer="text" align="left">📜 .env Example</h3>
 
 ###
 
